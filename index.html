@@ -1,0 +1,749 @@
+<title>Генератор знаков v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: tool panel on the left, square sign on the right; stacks on phones. */
+  :root {
+    --bg: #F0F1F3;
+    --fg: #1B1D22;
+    --muted: #636874;
+    --line: #D3D6DC;
+    --accent: #2447F5;
+    --ctl: #FFFFFF;
+    --stage: #E3E5E9;
+    --font: "Golos Text", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15171B; --fg: #ECEEF2; --muted: #9097A3; --line: #2D3139;
+      --accent: #8095FF; --ctl: #1F2228; --stage: #0E0F12; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15171B; --fg: #ECEEF2; --muted: #9097A3; --line: #2D3139;
+    --accent: #8095FF; --ctl: #1F2228; --stage: #0E0F12; color-scheme: dark;
+  }
+
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--fg); font: 14px/1.4 var(--font); }
+  * { box-sizing: border-box; }
+
+  .app {
+    display: grid;
+    grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
+    gap: 20px;
+    height: 100%;
+    padding: 16px;
+  }
+  .panel {
+    display: flex; flex-direction: column; gap: 22px;
+    overflow-y: auto; min-width: 0; padding-right: 4px;
+  }
+  .panel h1 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+  .panel header p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+
+  .axes { display: flex; flex-direction: column; gap: 20px; }
+  .axis-top { display: flex; justify-content: space-between; align-items: baseline; }
+  .axis-top label { font-weight: 500; }
+  .axis-top output { font: 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ends { display: flex; justify-content: space-between; gap: 12px; margin-top: 4px;
+          font-size: 12px; color: var(--muted); }
+  .ends span:last-child { text-align: right; }
+
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 28px;
+    background: transparent; margin: 0; cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-runnable-track { height: 2px; background: var(--line); border-radius: 1px; }
+  input[type="range"]::-moz-range-track { height: 2px; background: var(--line); border-radius: 1px; }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 20px; height: 20px; margin-top: -9px; border-radius: 50%;
+    background: var(--accent); border: 3px solid var(--bg); box-shadow: 0 0 0 1px var(--accent);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent); border: 3px solid var(--bg); box-shadow: 0 0 0 1px var(--accent);
+  }
+  input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .group { display: flex; flex-direction: column; gap: 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .group-title { font-size: 12px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .row.between { justify-content: space-between; }
+
+  button {
+    font: inherit; color: var(--fg); background: var(--ctl);
+    border: 1px solid var(--line); border-radius: 6px; padding: 7px 12px; cursor: pointer;
+  }
+  button:hover { border-color: var(--muted); }
+  button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  .seg { display: flex; }
+  .seg button { border-radius: 0; margin-left: -1px; min-width: 44px; font-variant-numeric: tabular-nums; }
+  .seg button:first-child { border-radius: 6px 0 0 6px; margin-left: 0; }
+  .seg button:last-child { border-radius: 0 6px 6px 0; }
+  .seg button[aria-pressed="true"] { position: relative; z-index: 1; }
+  .seg.wide { width: 100%; }
+  .seg.wide button { flex: 1; min-width: 0; padding-inline: 4px; }
+  .chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .chips button { padding: 7px 4px; font-size: 13px; }
+  .variant-label { font: 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  .check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .check input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
+
+  .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+  .swatch { width: 36px; height: 36px; padding: 0; border-radius: 6px; position: relative; overflow: hidden; }
+  .swatch i { position: absolute; inset: 0; }
+  .swatch b { position: absolute; width: 14px; height: 14px; border-radius: 50%; left: 11px; top: 11px; }
+  .swatch[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 2px; border-color: transparent; background: var(--ctl); }
+  .colors { display: flex; gap: 14px; }
+  .colors label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  .colors input { width: 32px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: var(--ctl); }
+
+  .stage { container-type: size; display: grid; place-items: center; min-width: 0; min-height: 0;
+           background: var(--stage); border-radius: 10px; }
+  .sign { width: min(calc(100cqw - 32px), calc(100cqh - 32px)); aspect-ratio: 1; display: block;
+          box-shadow: 0 1px 2px rgba(0,0,0,.12), 0 8px 30px rgba(0,0,0,.14); }
+  .sign svg { display: block; width: 100%; height: 100%; }
+
+  @media (max-width: 760px) {
+    html, body { height: auto; }
+    .app { grid-template-columns: minmax(0, 1fr); height: auto; }
+    .stage { order: -1; aspect-ratio: 1; width: 100%; }
+    .panel { overflow: visible; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    button { transition: border-color .12s; }
+  }
+</style>
+
+<div class="app">
+  <aside class="panel" aria-label="Параметры знака">
+    <header>
+      <h1>Генератор знаков</h1>
+      <p>Версия 2 · пять лучей из одной точки · сетка <span id="gridLabel">6 × 6</span></p>
+    </header>
+
+    <div class="axes">
+      <div class="axis">
+        <div class="axis-top"><label for="pw">Толщина лучей</label><output id="ow" for="pw">40</output></div>
+        <input id="pw" type="range" min="0" max="100" value="40">
+        <div class="ends"><span>тонкие</span><span>толстые</span></div>
+      </div>
+      <div class="axis">
+        <div class="axis-top"><label for="pd">Форма линии</label><output id="od" for="pd">100</output></div>
+        <input id="pd" type="range" min="0" max="100" value="100">
+        <div class="ends"><span>простая линия</span><span>утолщение на конце</span></div>
+      </div>
+      <div class="axis">
+        <div class="axis-top"><label for="ps">Пластика</label><output id="os" for="ps">0</output></div>
+        <input id="ps" type="range" min="0" max="100" value="0">
+        <div class="ends"><span>геометричная</span><span>плавная, пластичная, мягкая</span></div>
+      </div>
+    </div>
+
+    <section class="group" aria-labelledby="gh">
+      <div class="group-title" id="gh">Голова</div>
+      <div class="seg wide" id="headSeg" role="group" aria-label="Форма головы">
+        <button type="button" data-h="0" aria-pressed="true">Капля</button>
+        <button type="button" data-h="1" aria-pressed="false">Полумесяц</button>
+        <button type="button" data-h="2" aria-pressed="false">Сектор</button>
+      </div>
+      <div class="axis">
+        <div class="axis-top"><label for="phd">Толщина головы</label><output id="ohd" for="phd">50</output></div>
+        <input id="phd" type="range" min="0" max="100" value="50">
+        <div class="ends"><span>тоньше</span><span>толще</span></div>
+      </div>
+    </section>
+
+    <section class="group" aria-labelledby="gp">
+      <div class="group-title" id="gp">Поза</div>
+      <div class="row between">
+        <div class="row">
+          <button id="pPrev" type="button" aria-label="Предыдущая поза">←</button>
+          <button id="pNext" type="button" aria-label="Следующая поза">→</button>
+          <span class="variant-label" id="poseLabel">№ 8</span>
+        </div>
+        <button id="rand" type="button">Случайная</button>
+      </div>
+      <label class="check"><input id="mir" type="checkbox"> Зеркально</label>
+      <div class="group-title">Закрутка</div>
+      <div class="seg wide" id="swlSeg" role="group" aria-label="Закрутка лучей">
+        <button type="button" data-m="0" aria-pressed="true">Единая</button>
+        <button type="button" data-m="1" aria-pressed="false">Обратная</button>
+        <button type="button" data-m="2" aria-pressed="false">Смешанная</button>
+      </div>
+    </section>
+
+    <section class="group" aria-labelledby="gg">
+      <div class="group-title" id="gg">Сетка</div>
+      <div class="row between">
+        <div class="seg" id="gridSeg" role="group" aria-label="Модулей по стороне">
+          <button type="button" data-n="4" aria-pressed="false">4</button>
+          <button type="button" data-n="6" aria-pressed="true">6</button>
+          <button type="button" data-n="8" aria-pressed="false">8</button>
+          <button type="button" data-n="12" aria-pressed="false">12</button>
+        </div>
+        <label class="check"><input id="showGrid" type="checkbox"> Показать</label>
+      </div>
+    </section>
+
+    <section class="group" aria-labelledby="gc">
+      <div class="group-title" id="gc">Цвет</div>
+      <div class="swatches" id="swatches"></div>
+      <div class="colors">
+        <label>Фон <input id="bgc" type="color" value="#3A3A3A"></label>
+        <label>Знак <input id="inkc" type="color" value="#FFFFFF"></label>
+      </div>
+    </section>
+
+    <section class="group" aria-labelledby="ge">
+      <div class="group-title" id="ge">Экспорт</div>
+      <div class="row">
+        <button id="expSvg" type="button">Скачать SVG</button>
+        <button id="expPng" type="button">Скачать PNG</button>
+      </div>
+      <div class="variant-label" id="expMsg" aria-live="polite"></div>
+    </section>
+  </aside>
+
+  <main class="stage"><div class="sign" id="sign" role="img" aria-label="Сгенерированный знак"></div></main>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var M = 12;                      // canvas is 12 × 12 model units
+  var $ = function (id) { return document.getElementById(id); };
+  var lerp = function (a, b, t) { return a + (b - a) * t; };
+  var clamp = function (v, a, b) { return Math.min(b, Math.max(a, v)); };
+  var lerp2 = function (p, q, t) { return [lerp(p[0], q[0], t), lerp(p[1], q[1], t)]; };
+  var fmt = function (v) { return Math.round(v * 1000) / 1000; };
+  var pt = function (p) { return fmt(p[0]) + ' ' + fmt(p[1]); };
+  var normAng = function (x) { return Math.atan2(Math.sin(x), Math.cos(x)); };
+
+  /* ---------- geometry helpers ---------- */
+
+  // A ribbon is a centre line (quadratic Bézier + optional wobble) with a width profile.
+  function ribbon(R, T, ctrl, widthAt, wob, o) {
+    o = o || {};
+    var n = o.n || 36, raw = [], i, t;
+    for (i = 0; i <= n; i++) {
+      t = o.cos ? (1 - Math.cos(Math.PI * i / n)) / 2 : i / n;
+      var u = 1 - t;
+      var x = u * u * R[0] + 2 * u * t * ctrl[0] + t * t * T[0];
+      var y = u * u * R[1] + 2 * u * t * ctrl[1] + t * t * T[1];
+      var dx = 2 * u * (ctrl[0] - R[0]) + 2 * t * (T[0] - ctrl[0]);
+      var dy = 2 * u * (ctrl[1] - R[1]) + 2 * t * (T[1] - ctrl[1]);
+      var dl = Math.hypot(dx, dy) || 1;
+      var off = wob ? wob * Math.sin(2 * Math.PI * t) : 0;
+      raw.push([x - dy / dl * off, y + dx / dl * off]);
+    }
+    var cum = [0];
+    for (i = 1; i < raw.length; i++) cum[i] = cum[i - 1] + Math.hypot(raw[i][0] - raw[i - 1][0], raw[i][1] - raw[i - 1][1]);
+    var L = cum[cum.length - 1] || 1;
+    var pts = raw.map(function (p, i) { return { x: p[0], y: p[1], s: cum[i], u: cum[i] / L }; });
+    // extension past the tip, along the final tangent, so a grid line can cut the end cleanly
+    var a = pts[pts.length - 2], b = pts[pts.length - 1];
+    var tl = Math.hypot(b.x - a.x, b.y - a.y) || 1, tx = (b.x - a.x) / tl, ty = (b.y - a.y) / tl;
+    if (o.ext) {
+      for (i = 1; i <= 4; i++) pts.push({ x: b.x + tx * i * 0.9, y: b.y + ty * i * 0.9, s: L + i * 0.9, u: 1 });
+    }
+    for (i = 0; i < pts.length; i++) {
+      var p0 = pts[Math.max(0, i - 1)], p1 = pts[Math.min(pts.length - 1, i + 1)];
+      var ex = p1.x - p0.x, ey = p1.y - p0.y, el = Math.hypot(ex, ey) || 1;
+      pts[i].nx = -ey / el; pts[i].ny = ex / el;
+      pts[i].w = Math.max(0, widthAt(Math.min(1, pts[i].u)));
+    }
+    return { pts: pts, L: L, tip: [b.x - 0, b.y - 0], tdir: [tx, ty], tipPt: pts[n] };
+  }
+
+
+  /* ---------- liquid engine: signed-distance field + marching squares ---------- */
+
+  var G = 360, GW = G + 1, H = M / G;          // field resolution
+  function setRes(n) { G = n; GW = n + 1; H = M / n; }
+  var HALO = 0.3;                              // dark gap kept around the head
+
+  function smin(a, b, k) {
+    if (k <= 1e-6) return a < b ? a : b;
+    var h = Math.max(k - Math.abs(a - b), 0) / k;
+    return Math.min(a, b) - h * h * k * 0.25;
+  }
+  function smax(a, b, k) { return -smin(-a, -b, k); }
+
+  // Distance to a ribbon: a chain of round cones along its centre line, then cut by flat planes.
+  function chainField(r, planes) {
+    var P = r.pts, n = P.length - 1, ax = [], ay = [], dx = [], dy = [], l2 = [], ra = [], rb = [], i;
+    for (i = 0; i < n; i++) {
+      ax.push(P[i].x); ay.push(P[i].y);
+      dx.push(P[i + 1].x - P[i].x); dy.push(P[i + 1].y - P[i].y);
+      l2.push(Math.max(1e-9, dx[i] * dx[i] + dy[i] * dy[i]));
+      ra.push(P[i].w / 2); rb.push(P[i + 1].w / 2);
+    }
+    return function (x, y) {
+      var best = 1e9, i, j;
+      for (i = 0; i < n; i++) {
+        var px = x - ax[i], py = y - ay[i];
+        var t = (px * dx[i] + py * dy[i]) / l2[i];
+        t = t < 0 ? 0 : t > 1 ? 1 : t;
+        var qx = px - t * dx[i], qy = py - t * dy[i];
+        var d = Math.sqrt(qx * qx + qy * qy) - (ra[i] + (rb[i] - ra[i]) * t);
+        if (d < best) best = d;
+      }
+      for (j = 0; j < planes.length; j++) {
+        var pl = planes[j];
+        best = smax(best, pl[0] * x + pl[1] * y - pl[2], pl[3]);
+      }
+      return best;
+    };
+  }
+  function planeAt(px, py, nx, ny, k) {            // positive on the side the normal points to
+    var l = Math.hypot(nx, ny) || 1;
+    return [nx / l, ny / l, (nx * px + ny * py) / l, k];
+  }
+  function rootPlane(r) {
+    var a = r.pts[0], b = r.pts[1];
+    return planeAt(a.x, a.y, a.x - b.x, a.y - b.y, 0);
+  }
+  function endPlane(r, k) {
+    var a = r.pts[r.pts.length - 2], b = r.pts[r.pts.length - 1];
+    return planeAt(b.x, b.y, b.x - a.x, b.y - a.y, k);
+  }
+  function ellipseField(cx, cy, rx, ry, th) {
+    var c = Math.cos(th), sn = Math.sin(th), m = Math.min(rx, ry);
+    return function (x, y) {
+      var px = x - cx, py = y - cy, qx = px * c + py * sn, qy = -px * sn + py * c;
+      return (Math.sqrt(qx * qx / (rx * rx) + qy * qy / (ry * ry)) - 1) * m;
+    };
+  }
+  function coneField(x0, y0, r0, x1, y1, r1) {
+    var dx = x1 - x0, dy = y1 - y0, l2 = dx * dx + dy * dy || 1e-9;
+    return function (x, y) {
+      var t = ((x - x0) * dx + (y - y0) * dy) / l2;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      return Math.hypot(x - x0 - t * dx, y - y0 - t * dy) - (r0 + (r1 - r0) * t);
+    };
+  }
+  function bboxOf(r, margin) {
+    var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, wm = 0;
+    r.pts.forEach(function (p) {
+      x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); wm = Math.max(wm, p.w / 2);
+    });
+    return [x0 - wm - margin, y0 - wm - margin, x1 + wm + margin, y1 + wm + margin];
+  }
+  function walk(F, bb, fn) {
+    var i0 = Math.max(0, Math.floor(bb[0] / H)), i1 = Math.min(G, Math.ceil(bb[2] / H));
+    var j0 = Math.max(0, Math.floor(bb[1] / H)), j1 = Math.min(G, Math.ceil(bb[3] / H));
+    for (var j = j0; j <= j1; j++) for (var i = i0; i <= i1; i++) fn(j * GW + i, i * H, j * H);
+  }
+  function addField(F, bb, f, k) {                 // smooth union
+    walk(F, bb, function (idx, x, y) { F[idx] = smin(F[idx], f(x, y), k); });
+  }
+  function cutField(F, bb, g) {                    // carve out where g > 0
+    walk(F, bb, function (idx, x, y) { var v = g(x, y); if (v > F[idx]) F[idx] = v; });
+  }
+
+  // marching squares: the closed contours of the field's zero level
+  function contours(F) {
+    var seg = new Map(), i, j;
+    function link(a, b) {
+      var la = seg.get(a); if (la) la.push(b); else seg.set(a, [b]);
+      var lb = seg.get(b); if (lb) lb.push(a); else seg.set(b, [a]);
+    }
+    for (j = 0; j < G; j++) for (i = 0; i < G; i++) {
+      var v00 = F[j * GW + i], v10 = F[j * GW + i + 1], v11 = F[(j + 1) * GW + i + 1], v01 = F[(j + 1) * GW + i];
+      var c = (v00 < 0 ? 1 : 0) | (v10 < 0 ? 2 : 0) | (v11 < 0 ? 4 : 0) | (v01 < 0 ? 8 : 0);
+      if (c === 0 || c === 15) continue;
+      var eb = (j * GW + i) * 2, er = (j * GW + i + 1) * 2 + 1, et = ((j + 1) * GW + i) * 2, el = (j * GW + i) * 2 + 1;
+      var inside = (v00 + v10 + v11 + v01) < 0;
+      switch (c) {
+        case 1: case 14: link(el, eb); break;
+        case 2: case 13: link(eb, er); break;
+        case 3: case 12: link(el, er); break;
+        case 4: case 11: link(er, et); break;
+        case 6: case 9: link(eb, et); break;
+        case 7: case 8: link(el, et); break;
+        case 5: if (inside) { link(el, et); link(eb, er); } else { link(el, eb); link(er, et); } break;
+        case 10: if (inside) { link(el, eb); link(er, et); } else { link(eb, er); link(el, et); } break;
+      }
+    }
+    function pointOf(id) {
+      var idx = id >> 1, x = idx % GW, y = (idx - x) / GW;
+      if (id & 1) {
+        var a = F[idx], b = F[idx + GW];
+        return [x * H, (y + a / (a - b)) * H];
+      }
+      var a2 = F[idx], b2 = F[idx + 1];
+      return [(x + a2 / (a2 - b2)) * H, y * H];
+    }
+    var visited = new Set(), loops = [];
+    seg.forEach(function (_, start) {
+      if (visited.has(start)) return;
+      var loop = [], prev = -1, cur = start;
+      do {
+        visited.add(cur); loop.push(pointOf(cur));
+        var nb = seg.get(cur), nx = (nb[0] === prev) ? nb[1] : nb[0];
+        prev = cur; cur = nx;
+      } while (cur !== start && !visited.has(cur));
+      if (loop.length > 6) loops.push(loop);
+    });
+    return loops;
+  }
+
+  function dpOpen(P, tol) {
+    var n = P.length;
+    if (n < 3) return P.slice();
+    var keep = new Uint8Array(n), stack = [[0, n - 1]];
+    keep[0] = keep[n - 1] = 1;
+    while (stack.length) {
+      var sg = stack.pop(), a = sg[0], b = sg[1], idx = -1, md = tol, i;
+      var ax = P[a][0], ay = P[a][1], dx = P[b][0] - ax, dy = P[b][1] - ay, dl = Math.hypot(dx, dy) || 1e-9;
+      for (i = a + 1; i < b; i++) {
+        var dd = Math.abs((P[i][0] - ax) * dy - (P[i][1] - ay) * dx) / dl;
+        if (dd > md) { md = dd; idx = i; }
+      }
+      if (idx >= 0) { keep[idx] = 1; stack.push([a, idx], [idx, b]); }
+    }
+    return P.filter(function (_, i) { return keep[i]; });
+  }
+  function simplifyLoop(P, tol) {
+    var n = P.length, f = 0, best = 0, i;
+    for (i = 1; i < n; i++) { var d = Math.hypot(P[i][0] - P[0][0], P[i][1] - P[0][1]); if (d > best) { best = d; f = i; } }
+    var A = dpOpen(P.slice(0, f + 1), tol), B = dpOpen(P.slice(f).concat([P[0]]), tol);
+    return A.concat(B.slice(1, -1));
+  }
+  // marching squares chamfers every sharp corner; put the corner back where the two long edges meet
+  function sharpen(P) {
+    var n = P.length, res = [], used = [], i;
+    function cr(ax, ay, bx, by) { return ax * by - ay * bx; }
+    for (i = 0; i < n; i++) {
+      if (used[i]) continue;
+      var j = i + 1, a = P[(i + n - 1) % n], b = P[i];
+      if (j < n) {
+        var c = P[j], d = P[(j + 1) % n];
+        if (Math.hypot(c[0] - b[0], c[1] - b[1]) < 0.09 && Math.hypot(b[0] - a[0], b[1] - a[1]) > 0.12 && Math.hypot(d[0] - c[0], d[1] - c[1]) > 0.12) {
+          var rx = b[0] - a[0], ry = b[1] - a[1], sx = d[0] - c[0], sy = d[1] - c[1], den = cr(rx, ry, sx, sy);
+          var s1 = cr(rx, ry, c[0] - b[0], c[1] - b[1]), s2 = cr(c[0] - b[0], c[1] - b[1], sx, sy);
+          if (Math.abs(den) > 1e-6 && s1 * s2 > 0) {
+            var t = cr(c[0] - a[0], c[1] - a[1], sx, sy) / den, ix = a[0] + t * rx, iy = a[1] + t * ry;
+            if (Math.hypot(ix - (b[0] + c[0]) / 2, iy - (b[1] + c[1]) / 2) < 0.12) { res.push([ix, iy]); used[j] = true; continue; }
+          }
+        }
+      }
+      res.push(b);
+    }
+    return res;
+  }
+  function pathFromLoop(P) {
+    var n = P.length, i;
+    if (n < 3) return '';
+    var corner = [], tan = [];
+    for (i = 0; i < n; i++) {
+      var a = P[(i + n - 1) % n], b = P[i], c = P[(i + 1) % n];
+      var v1x = b[0] - a[0], v1y = b[1] - a[1], v2x = c[0] - b[0], v2y = c[1] - b[1];
+      corner.push(Math.abs(Math.atan2(v1x * v2y - v1y * v2x, v1x * v2x + v1y * v2y)) > 0.85);
+      var tx = c[0] - a[0], ty = c[1] - a[1], tl = Math.hypot(tx, ty) || 1;
+      tan.push([tx / tl, ty / tl]);
+    }
+    var d = 'M' + pt(P[0]);
+    for (i = 0; i < n; i++) {
+      var j = (i + 1) % n, L = Math.hypot(P[j][0] - P[i][0], P[j][1] - P[i][1]);
+      if (corner[i] && corner[j]) { d += 'L' + pt(P[j]); continue; }
+      var c1 = corner[i] ? P[i] : [P[i][0] + tan[i][0] * L / 3, P[i][1] + tan[i][1] * L / 3];
+      var c2 = corner[j] ? P[j] : [P[j][0] - tan[j][0] * L / 3, P[j][1] - tan[j][1] * L / 3];
+      d += 'C' + pt(c1) + ' ' + pt(c2) + ' ' + pt(P[j]);
+    }
+    return d + 'Z';
+  }
+
+
+  /* ---------- poses: generated from a number ---------- */
+
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  // Five rays from the centre node: a head and four limbs. Every tip is a node of the grid.
+  //  - the head looks up (within ~55° of the vertical) and is shorter than the limbs
+  //  - the legs go down, the arms go sideways or up
+  //  - no two rays are closer than ~36° (relaxed after many tries)
+  //  - the rays are balanced around the centre, so the sign does not lean to one side
+  function makePose(seed, N) {
+    var rnd = mulberry32(Math.imul(seed, 2654435761) ^ (N * 97)), i, j;
+    var maxOff = Math.max(1, N / 2 - 1), maxD = Math.hypot(maxOff, maxOff);
+    var minD = Math.min(0.62 * maxD, maxOff);           // limbs are at least this long (in grid steps)
+    var hMin = 0.35 * maxD, hMax = Math.max(1, 0.75 * maxD);
+    var all = [];
+    for (i = -maxOff; i <= maxOff; i++) for (j = -maxOff; j <= maxOff; j++) {
+      var c = Math.max(Math.abs(i), Math.abs(j));
+      if (c < 1) continue;
+      all.push({ dx: i, dy: j, c: c, d: Math.hypot(i, j), a: Math.atan2(j, i) });
+    }
+    var pick = function (f) {
+      var list = all.filter(f);
+      return list.length ? list[Math.floor(rnd() * list.length)] : null;
+    };
+    var up = -Math.PI / 2, found = null;
+    for (var tries = 0; tries < 900 && !found; tries++) {
+      var gap = tries < 450 ? 0.62 : 0.48;
+      var h = pick(function (p) { return p.d >= hMin && p.d <= hMax + 1e-6 && p.dy < 0 && Math.abs(normAng(p.a - up)) <= 0.8; });
+      var a1 = pick(function (p) { return p.d >= minD && p.dy <= p.d * 0.55; });
+      var a2 = pick(function (p) { return p.d >= minD && p.dy <= p.d * 0.55; });
+      var l1 = pick(function (p) { return p.d >= minD && p.dy >= p.d * 0.3; });
+      var l2 = pick(function (p) { return p.d >= minD && p.dy >= p.d * 0.3; });
+      if (!h || !a1 || !a2 || !l1 || !l2) continue;
+      var set = [h, a1, a2, l1, l2], ok = true, sx = 0, sy = 0;
+      var angs = set.map(function (p) { return p.a; }).sort(function (x, y) { return x - y; });
+      for (i = 0; i < 5 && ok; i++) {
+        var dd = (i === 4 ? angs[0] + 2 * Math.PI : angs[i + 1]) - angs[i];
+        if (dd < gap) ok = false;
+      }
+      set.forEach(function (p) { sx += Math.cos(p.a); sy += Math.sin(p.a); });
+      if (ok && Math.hypot(sx, sy) <= 1.25) found = set;
+    }
+    if (!found) {
+      var m = maxOff, hh = Math.max(1, Math.round(hMax));
+      found = [{ dx: 0, dy: -hh }, { dx: -m, dy: -Math.ceil(m / 2) }, { dx: m, dy: -Math.ceil(m / 2) },
+               { dx: -Math.ceil(m * 0.6), dy: m }, { dx: m, dy: m }];
+    }
+    var pose = { head: [found[0].dx, found[0].dy], limbs: [], bow: [], sgn: [] };
+    for (i = 1; i < 5; i++) pose.limbs.push([found[i].dx, found[i].dy]);
+    for (i = 0; i < 5; i++) { pose.bow.push(0.2 + 0.16 * rnd()); pose.sgn.push(rnd() < 0.5 ? -1 : 1); }
+    return pose;
+  }
+
+  /* ---------- heads (all grow from the centre point) ---------- */
+
+  function polyField(P) {
+    var n = P.length;
+    return function (x, y) {
+      var best = 1e9, inside = false, j = n - 1, i;
+      for (i = 0; i < n; i++) {
+        var ax = P[j][0], ay = P[j][1], bx = P[i][0], by = P[i][1];
+        var dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy || 1e-9;
+        var t = ((x - ax) * dx + (y - ay) * dy) / l2;
+        t = t < 0 ? 0 : t > 1 ? 1 : t;
+        var qx = x - ax - t * dx, qy = y - ay - t * dy, d = qx * qx + qy * qy;
+        if (d < best) best = d;
+        if (((ay > y) !== (by > y)) && (x < (bx - ax) * (y - ay) / (by - ay) + ax)) inside = !inside;
+        j = i;
+      }
+      best = Math.sqrt(best);
+      return inside ? -best : best;
+    };
+  }
+  function polyBox(P, m) {
+    var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    P.forEach(function (p) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); });
+    return [x0 - m, y0 - m, x1 + m, y1 + m];
+  }
+  // type 0: drop, 1: crescent, 2: sector. O is the centre, ang the direction, L the length, w 0..1 the thickness.
+  function headPoly(type, O, ang, L, w, sgn) {
+    var d = [Math.cos(ang), Math.sin(ang)], nv = [-d[1], d[0]], P = [], i, t;
+    if (type === 0) {
+      var r = clamp(L * lerp(0.12, 0.34, w), 0.25, L / 2.4), dd = L - r;
+      var al = Math.asin(r / dd), tl = Math.sqrt(dd * dd - r * r), c = [O[0] + d[0] * dd, O[1] + d[1] * dd];
+      var t1 = [O[0] + Math.cos(ang + al) * tl, O[1] + Math.sin(ang + al) * tl];
+      var t2 = [O[0] + Math.cos(ang - al) * tl, O[1] + Math.sin(ang - al) * tl];
+      var d1 = normAng(Math.atan2(t1[1] - c[1], t1[0] - c[0]) - ang);
+      P.push(O.slice(), t1);
+      for (i = 1; i <= 36; i++) { var th = ang + d1 - 2 * d1 * i / 36; P.push([c[0] + r * Math.cos(th), c[1] + r * Math.sin(th)]); }
+      P.push(t2);
+    } else if (type === 1) {
+      var T = [O[0] + d[0] * L, O[1] + d[1] * L], mid = [(O[0] + T[0]) / 2, (O[1] + T[1]) / 2];
+      var o1 = lerp(0.22, 0.85, w) * sgn, o2 = o1 * 0.18;
+      var c1 = [mid[0] + nv[0] * o1 * L * 2, mid[1] + nv[1] * o1 * L * 2], c2 = [mid[0] + nv[0] * o2 * L * 2, mid[1] + nv[1] * o2 * L * 2];
+      for (i = 0; i <= 24; i++) { t = i / 24; P.push([(1 - t) * (1 - t) * O[0] + 2 * (1 - t) * t * c1[0] + t * t * T[0], (1 - t) * (1 - t) * O[1] + 2 * (1 - t) * t * c1[1] + t * t * T[1]]); }
+      for (i = 23; i >= 1; i--) { t = i / 24; P.push([(1 - t) * (1 - t) * O[0] + 2 * (1 - t) * t * c2[0] + t * t * T[0], (1 - t) * (1 - t) * O[1] + 2 * (1 - t) * t * c2[1] + t * t * T[1]]); }
+    } else {
+      var half = lerp(0.2, 0.8, w);
+      P.push(O.slice());
+      for (i = 0; i <= 36; i++) { var th2 = ang - half + 2 * half * i / 36; P.push([O[0] + L * Math.cos(th2), O[1] + L * Math.sin(th2)]); }
+    }
+    return P;
+  }
+
+  /* ---------- the generator ---------- */
+
+  function generate(st, res) {
+    setRes(res || 360);
+    var step = M / st.N, k = clamp(step * 0.55, 0.8, 1.3) / 1.1;
+    var pose = makePose(st.seed, st.N), mir = st.mir ? 1 : 0;
+    var th = st.t, s = st.s, ks = s * 1.5, kr = s * 0.62;
+    var O = [M / 2, M / 2], F = new Float32Array(GW * GW), i;
+    F.fill(1e3);
+    var tipOf = function (o) { var x = O[0] + o[0] * step; return [mir ? M - x : x, O[1] + o[1] * step]; };
+    var sg = function (n) { return (st.swirl === 0 ? 1 : st.swirl === 1 ? -1 : pose.sgn[n]) * (mir ? -1 : 1); };
+
+    // four limbs: a line of even width; the line-shape slider turns it into a blade (pointed root, wide end)
+    pose.limbs.forEach(function (off, n) {
+      var t = tipOf(off), cx = t[0] - O[0], cy = t[1] - O[1], len = Math.hypot(cx, cy) || 1;
+      var mid = [(O[0] + t[0]) / 2, (O[1] + t[1]) / 2], bw = pose.bow[n] * len * sg(n);
+      var ctrl = [mid[0] - cy / len * bw, mid[1] + cx / len * bw];
+      var wLine = lerp(0.35, 1.3, st.w) * k, wBlade = len * lerp(0.1, 0.46, st.w);
+      var wAt = function (u) {
+        return lerp(wLine, wBlade * Math.pow(u, 0.75), th) * (1 + 0.25 * s * Math.sin(Math.PI * u));
+      };
+      var r = ribbon(O, t, ctrl, wAt, s * 0.06 * len * (n % 2 ? 1 : -1), { ext: true });
+      var tAxis = Math.abs(r.tdir[0]) >= Math.abs(r.tdir[1]) ? 0 : 1, sgn = r.tdir[tAxis] > 0 ? 1 : -1;
+      var tipPlane = planeAt(t[0], t[1], tAxis === 0 ? sgn : 0, tAxis === 1 ? sgn : 0, kr);   // the tip is cut flat on a grid line
+      addField(F, bboxOf(r, ks + 0.5), chainField(r, [tipPlane]), ks);
+    });
+
+    // the head
+    var ht = tipOf(pose.head), hang = Math.atan2(ht[1] - O[1], ht[0] - O[0]), hlen = Math.hypot(ht[0] - O[0], ht[1] - O[1]);
+    var hp = headPoly(st.head, O, hang, hlen, st.ht, sg(4));
+    addField(F, polyBox(hp, ks + 1), polyField(hp), ks);
+
+    for (i = 0; i <= G; i++) { F[i] = F[G * GW + i] = F[i * GW] = F[i * GW + G] = 1; }
+    var d = '';
+    contours(F).forEach(function (loop) {
+      var P = sharpen(simplifyLoop(loop, 0.012)), ar = 0, q;
+      for (q = 0; q < P.length; q++) ar += P[q][0] * P[(q + 1) % P.length][1] - P[(q + 1) % P.length][0] * P[q][1];
+      if (Math.abs(ar) / 2 > 0.06) d += pathFromLoop(P);      // skip pin-holes and specks
+    });
+    return d ? ['<path fill-rule="evenodd" d="' + d + '"/>'] : [];
+  }
+
+  /* ---------- UI state & rendering ---------- */
+
+  var PRESETS = [['#3A3A3A', '#FFFFFF'], ['#FFFFFF', '#262626'], ['#2447F5', '#FFFFFF'], ['#D9E7E0', '#16352B'], ['#FFD84D', '#1F1F1F']];
+  var st = { w: 0.4, t: 1, s: 0, head: 0, ht: 0.5, seed: 8, mir: false, swirl: 0, N: 6, grid: false, bg: '#3A3A3A', ink: '#FFFFFF' };
+
+  function gridSvg(N) {
+    var step = M / N, o = '', i, j;
+    for (i = 0; i <= N; i++) {
+      o += '<path d="M' + fmt(i * step) + ' 0V' + M + 'M0 ' + fmt(i * step) + 'H' + M + '"/>';
+    }
+    var dots = '';
+    for (i = 0; i <= N; i++) for (j = 0; j <= N; j++) dots += '<circle cx="' + fmt(i * step) + '" cy="' + fmt(j * step) + '" r="0.07"/>';
+    return '<g fill="none" stroke="' + st.ink + '" stroke-opacity=".22" stroke-width="1" vector-effect="non-scaling-stroke">' +
+      o.replace(/<path /g, '<path vector-effect="non-scaling-stroke" ') + '</g><g fill="' + st.ink + '" fill-opacity=".5">' + dots + '</g>';
+  }
+
+  function svgDoc(withGrid, size, fast) {
+    var body = generate(st, fast ? 200 : 360).join('');
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + M + ' ' + M + '"' +
+      (size ? ' width="' + size + '" height="' + size + '"' : '') + '>' +
+      '<rect width="' + M + '" height="' + M + '" fill="' + st.bg + '"/>' +
+      (withGrid ? gridSvg(st.N) : '') +
+      '<g fill="' + st.ink + '">' + body + '</g></svg>';
+  }
+
+  var pending = false, fastFlag = false, settle = null;
+  function render(fast) {
+    if (fast === true) fastFlag = true;
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(function () {
+      pending = false;
+      var f = fastFlag; fastFlag = false;
+      $('sign').innerHTML = svgDoc(st.grid, 0, f);
+      if (f) {                                   // coarse while a slider moves, sharp once it rests
+        clearTimeout(settle);
+        settle = setTimeout(function () { $('sign').innerHTML = svgDoc(st.grid); }, 160);
+      }
+    });
+  }
+
+  function pressed(parent, test) {
+    Array.prototype.forEach.call(parent.querySelectorAll('button'), function (b) { b.setAttribute('aria-pressed', String(test(b))); });
+  }
+  function syncLabels() {
+    $('ow').textContent = Math.round(st.w * 100);
+    $('od').textContent = Math.round(st.t * 100);
+    $('os').textContent = Math.round(st.s * 100);
+    $('ohd').textContent = Math.round(st.ht * 100);
+    $('gridLabel').textContent = st.N + ' × ' + st.N;
+    $('poseLabel').textContent = '№ ' + st.seed;
+    pressed($('headSeg'), function (b) { return +b.dataset.h === st.head; });
+    pressed($('swlSeg'), function (b) { return +b.dataset.m === st.swirl; });
+    pressed($('gridSeg'), function (b) { return +b.dataset.n === st.N; });
+  }
+
+  function bind(id, key) {
+    $(id).addEventListener('input', function (e) { st[key] = e.target.value / 100; syncLabels(); render(true); });
+  }
+  bind('pw', 'w'); bind('pd', 't'); bind('ps', 's'); bind('phd', 'ht');
+
+  function segment(id, attr, key) {
+    Array.prototype.forEach.call($(id).querySelectorAll('button'), function (b) {
+      b.addEventListener('click', function () { st[key] = +b.dataset[attr]; syncLabels(); render(); });
+    });
+  }
+  segment('headSeg', 'h', 'head'); segment('swlSeg', 'm', 'swirl'); segment('gridSeg', 'n', 'N');
+
+  function setSeed(n) { st.seed = ((n - 1) % 9999 + 9999) % 9999 + 1; syncLabels(); render(); }
+  $('pPrev').addEventListener('click', function () { setSeed(st.seed - 1); });
+  $('pNext').addEventListener('click', function () { setSeed(st.seed + 1); });
+  $('rand').addEventListener('click', function () { setSeed(1 + Math.floor(Math.random() * 9999)); });
+  $('mir').addEventListener('change', function (e) { st.mir = e.target.checked; render(); });
+  $('showGrid').addEventListener('change', function (e) { st.grid = e.target.checked; render(); });
+
+  function setColors(bg, ink) {
+    st.bg = bg; st.ink = ink;
+    $('bgc').value = bg.toLowerCase(); $('inkc').value = ink.toLowerCase();
+    Array.prototype.forEach.call($('swatches').children, function (b, i) {
+      b.setAttribute('aria-pressed', String(PRESETS[i][0].toLowerCase() === bg.toLowerCase() && PRESETS[i][1].toLowerCase() === ink.toLowerCase()));
+    });
+    render();
+  }
+  PRESETS.forEach(function (p) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'swatch'; b.setAttribute('aria-label', 'Фон ' + p[0] + ', знак ' + p[1]);
+    b.innerHTML = '<i style="background:' + p[0] + '"></i><b style="background:' + p[1] + '"></b>';
+    b.addEventListener('click', function () { setColors(p[0], p[1]); });
+    $('swatches').appendChild(b);
+  });
+  $('bgc').addEventListener('input', function (e) { setColors(e.target.value, st.ink); });
+  $('inkc').addEventListener('input', function (e) { setColors(st.bg, e.target.value); });
+
+  /* ---------- export ---------- */
+
+  var downloadsNs = null;
+  if (window.claude && window.claude.use) {
+    window.claude.use('downloads').then(function (ns) { downloadsNs = ns || null; }, function () {});
+  }
+  function say(msg) { $('expMsg').textContent = msg; }
+  function saveBlob(name, blob) {
+    if (downloadsNs) {
+      downloadsNs.save({ filename: name, data: blob }).then(
+        function () { say('Сохранено: ' + name); },
+        function (err) { say(err && err.code === 'declined' ? 'Сохранение отменено' : 'Не удалось сохранить файл'); }
+      );
+      return;
+    }
+    var url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+    say('Файл ' + name + ' готов');
+  }
+  function stamp() { return 'znak2-' + Math.round(st.w * 100) + '-' + Math.round(st.t * 100) + '-' + Math.round(st.s * 100) + '-g' + st.N + '-p' + st.seed; }
+  $('expSvg').addEventListener('click', function () {
+    saveBlob(stamp() + '.svg', new Blob([svgDoc(false, 1024)], { type: 'image/svg+xml' }));
+  });
+  $('expPng').addEventListener('click', function () {
+    var img = new Image(), url = URL.createObjectURL(new Blob([svgDoc(false, 2048)], { type: 'image/svg+xml' }));
+    img.onload = function () {
+      var c = document.createElement('canvas'); c.width = c.height = 2048;
+      c.getContext('2d').drawImage(img, 0, 0, 2048, 2048);
+      URL.revokeObjectURL(url);
+      c.toBlob(function (b) { if (b) saveBlob(stamp() + '.png', b); else say('Не удалось собрать PNG'); }, 'image/png');
+    };
+    img.onerror = function () { say('Не удалось собрать PNG'); };
+    img.src = url;
+  });
+
+  setColors(st.bg, st.ink);
+  syncLabels();
+  render();
+})();
+</script>
+
